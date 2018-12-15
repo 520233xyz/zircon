@@ -7,6 +7,7 @@
 #include <zircon/assert.h>
 #include <stdlib.h>
 
+//实现裸机上 C++ 的 new delete
 // In ASan builds, the ASan runtime supplies the operator new/delete functions.
 // Those versions check for mismatches between allocation entry path and
 // deallocation entry path, so we don't want to override them.  Also, in

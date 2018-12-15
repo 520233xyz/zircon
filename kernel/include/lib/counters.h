@@ -50,6 +50,7 @@ static_assert(sizeof(struct k_counter_desc) ==
               sizeof(((struct percpu){}).counters[0]),
               "the kernel.ld ASSERT knows that these sizes match");
 
+//大概是让他们在同一个段内
 // Define the descriptor and reserve the arena space for the counters.
 // Because of -fdata-sections, each kcounter_arena_* array will be
 // placed in a .bss.kcounter.* section; kernel.ld recognizes those names
