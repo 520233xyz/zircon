@@ -163,7 +163,7 @@ struct remove_extent<T[N]> {
 };
 
 // move
-
+//可能是把 C++ 类转换成 C 中的结构体？？？？？
 template <typename T>
 constexpr typename remove_reference<T>::type&& move(T&& t) {
     return static_cast<typename remove_reference<T>::type&&>(t);

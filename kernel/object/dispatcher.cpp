@@ -41,6 +41,7 @@ zx_koid_t GenerateKernelObjectId() {
 // Helper class that safely allows deleting Dispatchers without
 // risk of blowing up the kernel stack. It uses one TLS slot to
 // unwind the recursion.
+//从线程局部存储中删除分发器，这是线程安全的，不需要加锁
 class SafeDeleter {
 public:
     static void Delete(Dispatcher* kobj) {

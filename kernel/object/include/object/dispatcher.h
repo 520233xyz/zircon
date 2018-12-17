@@ -82,6 +82,8 @@ DECLARE_DISPTAG(SuspendTokenDispatcher, ZX_OBJ_TYPE_SUSPEND_TOKEN)
 //
 // You don't derive directly from this class; instead derive
 // from SoloDispatcher or PeeredDispatcher.
+//所有需要暴露给用户态内核对象都要继承自这个类
+//具体功能应该是向用户态的观测者们分发内核对象的事件
 class Dispatcher : private fbl::RefCountedUpgradeable<Dispatcher>,
                    private fbl::Recyclable<Dispatcher> {
 public:
