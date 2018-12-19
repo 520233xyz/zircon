@@ -56,8 +56,11 @@ add sp, sp, #\value
 .cfi_adjust_cfa_offset -\value
 .endm
 
+//定义 adr_global,功能是得到 symbol 下全局变量表的地址
 .macro adr_global reg, symbol
+//得到包含 symbol 4K 内存页的基地址
 adrp \reg, \symbol
+//第一个全局变量的地址
 add \reg, \reg, #:lo12:\symbol
 .endm
 

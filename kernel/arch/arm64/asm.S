@@ -48,16 +48,20 @@ FUNCTION(arm64_context_switch)
     ret
 END_FUNCTION(arm64_context_switch)
 
+//
 FUNCTION(arm64_elX_to_el1)
-    mrs x9, CurrentEL
-
+    //读取现在的异常级别
+    mrs x9, CurrentEL 
     cmp x9, #(0b01 << 2)
-    bne .notEL1
+    //不等于 0 时，说明不是在异常级别 1，跳转到 notEL1 代码
+    bne .notEL1 
     /* Already in EL1 */
     ret
 
 .notEL1:
     cmp x9, #(0b10 << 2)
+
+    //当前为异常级别 2，跳转到 inEL2
     beq .inEL2
 
     /* set EL2 to 64bit and enable HVC instruction */
@@ -76,7 +80,9 @@ FUNCTION(arm64_elX_to_el1)
 
 .inEL2:
     /* Setup the init vector table for EL2. */
+    //计算EL2的异常向量表的基地址
     adr_global x9, arm64_el2_init_table
+    //设定EL2的异常向量表的基地址
     msr vbar_el2, x9
 
     /* Ensure EL1 timers are properly configured, disable EL2 trapping of

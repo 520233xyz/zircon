@@ -38,6 +38,7 @@ static void call_constructors() {
         (*a)();
 }
 
+//内核初始化
 // called from arch code
 void lk_main() {
     // serial prints to console based on compile time switch

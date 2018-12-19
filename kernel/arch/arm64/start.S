@@ -33,12 +33,13 @@ kernel_vaddr            .req x22
 // This code is purely position-independent and generates no relocations
 // that need boot-time fixup; gen-kaslr-fixup.sh ensures this (and would
 // ignore it if this code were in .text.boot, so don't put it there).
+//启动代码
 .text
 FUNCTION(_start)
     /* Save the Boot info for the primary CPU only */
-    mrs     cpuid, mpidr_el1
-    ubfx    cpuid, cpuid, #0, #15 /* mask Aff0 and Aff1 fields */
-    cbnz    cpuid, .Lno_save_bootinfo
+    mrs     cpuid, mpidr_el1 // http://infocenter.arm.com/help/index.jsp?topic=/com.arm.doc.100798_0300_00_en/lau1443447573920.html 保存 CPU 信息
+    ubfx    cpuid, cpuid, #0, #15 /* mask Aff0 and Aff1 fields */ //aff0 记录 cpu 个数，aff1 记录是否支持超线程
+    cbnz    cpuid, .Lno_save_bootinfo //如果不是单核处理器，则跳转到 Lno_save_bootinfo 执行
     /* save x0 in zbi_paddr */
     adrp    tmp, zbi_paddr
     str     x0, [tmp, #:lo12:zbi_paddr]
