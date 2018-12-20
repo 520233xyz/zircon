@@ -9,13 +9,16 @@
 // https://opensource.org/licenses/MIT
 */
 
+// STV_HIDDEN https://developer.arm.com/docs/100070/0610/linker-command-line-options/-use_definition_visibility
+// http://infocenter.arm.com/help/index.jsp?topic=/com.arm.doc.dui0381ac/CACFJIBE.html
+
 /*
  * Symbols used in the kernel proper are defined with PROVIDE_HIDDEN:
  * HIDDEN because everything in the kernel is STV_HIDDEN to make it
  * clear that direct PC-relative references should be generated in PIC;
  * PROVIDE because their only purpose is to satisfy kernel references.
  */
-
+//内核各个段的分布
 SECTIONS
 {
     . = KERNEL_BASE;
@@ -204,6 +207,9 @@ SECTIONS
      * them, so we cannot allow any such cases.  There is no
      * good way to assert that, though.
      */
+
+    //将在此处插入任何可写的孤立部分。
+    //但是没有办法将 __data_end 符号放在它们之后，所以我们不能允许任何这样的情况。但是，没有好办法断言。
 
     .bss : ALIGN(4096) {
         PROVIDE_HIDDEN(__bss_start = .);

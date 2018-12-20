@@ -57,6 +57,8 @@ END_DATA(_zbi_kernel_payload)
 .org BOOT_HEADER_SIZE
 
 // Include the kernel image itself, skipping the padding left for the headers.
+
+//__data_end
 DATA(kernel_image)
 .incbin KERNEL_IMAGE, BOOT_HEADER_SIZE
 DATA(kernel_image_end)

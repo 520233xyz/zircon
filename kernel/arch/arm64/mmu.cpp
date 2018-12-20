@@ -57,6 +57,10 @@ static_assert(MMU_KERNEL_SIZE_SHIFT >= 25, "");
 // Static relocated base to prepare for KASLR. Used at early boot and by gdb
 // script to know the target relocated address.
 // TODO(SEC-31): Choose it randomly.
+//是否关闭内核地址空间分布随机化
+//KASLR技术允许kernel image加载到VMALLOC区域的任何位置
+//好像目前还没完成。。。所以是个固定值
+//参考 http://www.wowotech.net/memory_management/441.html
 #if DISABLE_KASLR
 uint64_t kernel_relocated_base = KERNEL_BASE;
 #else

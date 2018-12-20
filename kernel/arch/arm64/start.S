@@ -38,10 +38,11 @@ kernel_vaddr            .req x22
 FUNCTION(_start)
     /* Save the Boot info for the primary CPU only */
     mrs     cpuid, mpidr_el1 // http://infocenter.arm.com/help/index.jsp?topic=/com.arm.doc.100798_0300_00_en/lau1443447573920.html 保存 CPU 信息
-    ubfx    cpuid, cpuid, #0, #15 /* mask Aff0 and Aff1 fields */ //aff0 记录 cpu 个数，aff1 记录是否支持超线程
-    cbnz    cpuid, .Lno_save_bootinfo //如果不是单核处理器，则跳转到 Lno_save_bootinfo 执行
+    ubfx    cpuid, cpuid, #0, #15 /* mask Aff0 and Aff1 fields */ //aff0 记录 cpu ID，aff1 记录是否支持超线程
+    cbnz    cpuid, .Lno_save_bootinfo //如果不是 prim 核心(0 号核心)，则不需要启动内核，也就不需要准备内核启动参数，直接执行核心初始化工作
     /* save x0 in zbi_paddr */
-    //单核处理器
+    //prim 核心走这里，准备并保存内核启动参数
+    //计算 zbi_paddr 段中数据的地址，保存在 x0 中，下同
     adrp    tmp, zbi_paddr
     str     x0, [tmp, #:lo12:zbi_paddr]
     /* save entry point physical address in kernel_entry_paddr */
@@ -51,42 +52,70 @@ FUNCTION(_start)
     adrp    tmp2, arch_boot_el
     mrs     x2, CurrentEL
     str     x2, [tmp2, #:lo12:arch_boot_el]
+    //总之，x0 - x4 现在保存了核心初始化需要的参数，为跳转到 C 世界作准备。
+
 .Lno_save_bootinfo:
     
+    //配置其他异常等级 elx 进入 el1 的环境 *
+    //由于 arm64_elX_to_el1 程序末尾执行了 eret 跳转到了 EL1 等级，那么下面代码在 EL1 运行。
     bl      arm64_elX_to_el1
+
+    //禁用所有 MMU/Cache *
     bl      arch_invalidate_cache_all
 
     /* enable caches so atomics and spinlocks work */
+    //启用缓存，使原子操作和自旋锁生效
     mrs     tmp, sctlr_el1
+    //打开指令缓存
     orr     tmp, tmp, #(1<<12) /* Enable icache */
+    //打开数据缓存
     orr     tmp, tmp, #(1<<2)  /* Enable dcache/ucache */
     msr     sctlr_el1, tmp
 
     // This can be any arbitrary (page-aligned) address >= KERNEL_ASPACE_BASE.
     // TODO(SEC-31): Choose it randomly.
+    //加载 kernel_relocated_base 段地址,内核代码开始地址存在的 4K 内存页基地址
+    //内核重定向的基地址，即内核开始的虚拟地址
     adr_global  tmp, kernel_relocated_base
+    //负值给 kernel_vaddr
     ldr     kernel_vaddr, [tmp]
 
     // Load the base of the translation tables.
+    //貌似 Zircon 中 1GB 物理内存由一个 translation_table 维护，所以这里 tt_trampoline 相当于一级页表？
     adr_global page_table0, tt_trampoline
+    //虚拟地址内存页地址转换表
     adr_global page_table1, arm64_kernel_translation_table
 
     // Send secondary cpus over to a waiting spot for the primary to finish.
+    //如果不是 prim CPU 内核，则跳转到 Lmmu_enable_secondary 后等待 prim 内核运行完下面代码
     cbnz    cpuid, .Lmmu_enable_secondary
+    //下面的代码只有 prim CPU 内核执行
 
     // The fixup code appears right after the kernel image (at __data_end in
     // our view).  Note this code overlaps with the kernel's bss!  It
     // expects x0 to contain the actual runtime address of __code_start.
+    //将内核代码开始的虚拟地址保存到 x0 中
     mov     x0, kernel_vaddr
+    //跳转到 __data_end *
+    //__data_end 指向 kernel_image 段地址
     bl      __data_end
 
     /* clear out the kernel's bss using current physical location */
     /* NOTE: Relies on __bss_start and _end being 16 byte aligned */
+
+//检查内核 bss 段是否被清除，猜测是因为前面 bss 段所在内存已经被操作过   
 .Ldo_bss:
+    //见 kernel.ld
+    //计算保存内核 .bss 段开始地址
     adr_global tmp, __bss_start
+    //计算保存内核 .bss 段结束地址
     adr_global tmp2, _end
+    //计算 .bss 段大小
     sub     tmp2, tmp2, tmp
+    //.bss 段大小为 0 则跳转 Lbss_loop_done
     cbz     tmp2, .Lbss_loop_done
+
+//不为 0 则循环等待
 .Lbss_loop:
     sub     tmp2, tmp2, #16
     stp     xzr, xzr, [tmp], #16
@@ -94,11 +123,13 @@ FUNCTION(_start)
 .Lbss_loop_done:
 
     /* set up a functional stack pointer */
+    //设定内核地址
     adr_global tmp, boot_cpu_kstack_end
     mov     sp, tmp
 
     /* make sure the boot allocator is given a chance to figure out where
      * we are loaded in physical memory. */
+     
     bl      boot_alloc_init
 
     /* save the physical address the kernel is loaded at */
@@ -269,6 +300,8 @@ END_FUNCTION(_start)
 
 // These are logically .bss (uninitialized data).  But they're set before
 // clearing the .bss, so put them in .data so they don't get zeroed.
+
+//静态数据，内核启动默认参数
 .data
     .balign 64
 DATA(arch_boot_el)

@@ -48,7 +48,7 @@ FUNCTION(arm64_context_switch)
     ret
 END_FUNCTION(arm64_context_switch)
 
-//
+//配置 ELX - EL1，不包括 EL
 FUNCTION(arm64_elX_to_el1)
     //读取现在的异常级别
     mrs x9, CurrentEL 
@@ -56,6 +56,7 @@ FUNCTION(arm64_elX_to_el1)
     //不等于 0 时，说明不是在异常级别 1，跳转到 notEL1 代码
     bne .notEL1 
     /* Already in EL1 */
+    //EL1 直接返回
     ret
 
 .notEL1:
@@ -64,7 +65,7 @@ FUNCTION(arm64_elX_to_el1)
     //当前为异常级别 2，跳转到 inEL2
     beq .inEL2
 
-    //当不在 EL2 状态时
+    //当不在 EL2 状态时，则为 EL3
     /* set EL2 to 64bit and enable HVC instruction */
     //scr_el3 控制EL0/EL1/EL2的异常路由  逻辑1允许
     //http://infocenter.arm.com/help/index.jsp?topic=/com.arm.doc.100403_0200_00_en/lau1457340777806.html
@@ -90,7 +91,7 @@ FUNCTION(arm64_elX_to_el1)
     mov x9, #((0b1111 << 6) | (0b0101)) /* EL1h runlevel */
     msr spsr_el3, x9
 
-    //配置 EL1 *
+    //配置 EL1 并准备进入 EL1 *
     b   .confEL1
 
 .inEL2:
@@ -121,7 +122,7 @@ FUNCTION(arm64_elX_to_el1)
     mov x9, #((0b1111 << 6) | (0b0101)) /* EL1h runlevel */
     msr spsr_el2, x9
 
-//配置 EL1
+//配置 EL1 并准备进入 EL1
 .confEL1:
     /* disable EL2 coprocessor traps */
     mov x9, #0x33ff
@@ -137,10 +138,13 @@ FUNCTION(arm64_elX_to_el1)
     msr cpacr_el1, x9
 
     /* set up the EL1 bounce interrupt */
-    mov x9, sp
+
+    //配置 EL1 栈指针
+    mov x9, sp   
     msr sp_el1, x9
 
     isb
+    //模拟异常返回，执行该指令会使得CPU返回EL1状态
     eret
 
 .Ltarget:
