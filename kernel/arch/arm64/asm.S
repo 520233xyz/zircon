@@ -64,18 +64,33 @@ FUNCTION(arm64_elX_to_el1)
     //当前为异常级别 2，跳转到 inEL2
     beq .inEL2
 
+    //当不在 EL2 状态时
     /* set EL2 to 64bit and enable HVC instruction */
+    //scr_el3 控制EL0/EL1/EL2的异常路由  逻辑1允许
+    //http://infocenter.arm.com/help/index.jsp?topic=/com.arm.doc.100403_0200_00_en/lau1457340777806.html
+    //若SCR_EL3.RW == 1，则决定 EL2/EL1 是使用AArch64，否则AArch32
     mrs x9, scr_el3
+    //打开 EL0/EL1 的非安全状态，EL0/EL1 无法访问安全内存 
     orr x9, x9, #SCR_EL3_NS
+    //开启 HVC 指令
+    //关于 HVC，看 http://www.wowotech.net/armv8a_arch/238.html
     orr x9, x9, #SCR_EL3_HCE
-    orr x9, x9, #SCR_EL3_RW
+    //设置 SCR_EL3.RW == 1，EL2/EL1 是使用AArch64
+    orr x9, x9, #SCR_EL3_RW 
     msr scr_el3, x9
 
+    //ELR 寄存器 Exception Link Register，用于保存异常进入ELX的异常地址，在返回异常现场的时候，可以使用 ELR_ELX(x = 1/2/3) 来恢复PC值, 异常迁移到哪一个exception level就使用哪一个ELR
+    //同样的，由于不会有异常把系统状态迁移到EL0,因此也就不存在ELR_EL0了。
     adr x9, .Ltarget
+    //这里异常进入地址为 Ltarget
     msr elr_el3, x9
 
+
+    //设定 spsr_el3
     mov x9, #((0b1111 << 6) | (0b0101)) /* EL1h runlevel */
     msr spsr_el3, x9
+
+    //配置 EL1 *
     b   .confEL1
 
 .inEL2:
@@ -88,25 +103,32 @@ FUNCTION(arm64_elX_to_el1)
     /* Ensure EL1 timers are properly configured, disable EL2 trapping of
         EL1 access to timer control registers.  Also clear virtual offset.
     */
+    //检查并配置 EL1 的定时器
     mrs x9, cnthctl_el2
     orr x9, x9, #3
     msr cnthctl_el2, x9
     msr cntvoff_el2, xzr
 
     /* clear out stage 2 translations */
-    msr vttbr_el2, xzr
+    //清除 vttbr_el2 寄存器，vttbr_el2 保存了转换表的基地址，负责在 EL2 下进行 EL0 -> EL1 的非安全存储器访问的转换
+    msr vttbr_el2, xzr //http://infocenter.arm.com/help/index.jsp?topic=/com.arm.doc.100403_0200_00_en/lau1457340777806.html
 
+    //当系统发生了异常并进入EL2，SPSR_EL2，Saved Program Status Register (EL2)会保存处理器状态，ELR_EL2，Exception Link Register (EL2)会保存返回发生exception的现场的返回地址。
+    //这里是设定SPSR_EL2和ELR_EL2的初始值。
     adr x9, .Ltarget
     msr elr_el2, x9
+    //ELR 定义看上面
     mov x9, #((0b1111 << 6) | (0b0101)) /* EL1h runlevel */
     msr spsr_el2, x9
 
+//配置 EL1
 .confEL1:
     /* disable EL2 coprocessor traps */
     mov x9, #0x33ff
     msr cptr_el2, x9
 
     /* set EL1 to 64bit */
+    //设置 EL1 的异常处理为 AARCH64 指令，同上
     mov x9, #HCR_EL2_RW
     msr hcr_el2, x9
 

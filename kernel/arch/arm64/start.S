@@ -41,6 +41,7 @@ FUNCTION(_start)
     ubfx    cpuid, cpuid, #0, #15 /* mask Aff0 and Aff1 fields */ //aff0 记录 cpu 个数，aff1 记录是否支持超线程
     cbnz    cpuid, .Lno_save_bootinfo //如果不是单核处理器，则跳转到 Lno_save_bootinfo 执行
     /* save x0 in zbi_paddr */
+    //单核处理器
     adrp    tmp, zbi_paddr
     str     x0, [tmp, #:lo12:zbi_paddr]
     /* save entry point physical address in kernel_entry_paddr */
@@ -51,7 +52,7 @@ FUNCTION(_start)
     mrs     x2, CurrentEL
     str     x2, [tmp2, #:lo12:arch_boot_el]
 .Lno_save_bootinfo:
-
+    
     bl      arm64_elX_to_el1
     bl      arch_invalidate_cache_all
 
