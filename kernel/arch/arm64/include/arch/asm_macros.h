@@ -57,6 +57,9 @@ add sp, sp, #\value
 .endm
 
 //定义 adr_global,功能是得到 symbol 下全局变量表的地址
+//为什么需要这么做？
+//因为 Kernel Link 的时候是根据虚拟地址编译的，而在内核引导初期 CPU MMU 是被关闭的，这段时间内核是跑在物理地址上的，那么 Kernel 前段代码必须是 PIC 代码，即位置无关代码。
+//那么在这段 PIC 代码中，就需要这个指令来算出变量的实际地址。
 .macro adr_global reg, symbol
 //得到包含 symbol 4K 内存页的基地址
 adrp \reg, \symbol

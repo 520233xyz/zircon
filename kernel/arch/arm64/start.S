@@ -220,25 +220,42 @@ FUNCTION(_start)
     str     tmp2, [page_table0, tmp, lsl #3]  /* tt_trampoline[paddr index] = pt entry */
 
     /* mark page tables as set up, so secondary cpus can fall through */
+    //标记页表已经设置完毕，通知其他 CPU 内核可以继续往下跑了
     adr_global tmp, page_tables_not_ready
     str     wzr, [tmp]
+    //prime CPU 内核跳入 Lpage_tables_ready
     b       .Lpage_tables_ready
 
+//其他 CPU 内核在这里自旋等待页表初始化完成
 .Lmmu_enable_secondary:
     adr_global tmp, page_tables_not_ready
     /* trap any secondary cpus until the primary has set up the page tables */
 .Lpage_tables_not_ready:
     ldr     wtmp2, [tmp]
     cbnz    wtmp2, .Lpage_tables_not_ready
+
+
+//注意！所有 CPU 都会执行到这里
 .Lpage_tables_ready:
 
+    //建议看 http://www.wowotech.net/armv8a_arch/__cpu_setup.html
+    
+    //下面主要是对 MMU 和 Cache 的配置
+    //这里需要重置一下 MMU 和 Cache 的状态以清除里面的残余数据
+    //主要因为在进入 Kernel 代码之前，Bootloader 可能使用过 MMU 和 Cache，所以 ICache 和 TLB 中可能还有前面留下来的残余垃圾数据
     /* set up the mmu */
-
+    
+    //使 TLB 失效以清除数据
     /* Invalidate TLB */
     tlbi    vmalle1is
+
+    //内存栅栏，防止指令重排
     isb
     dsb     sy
 
+    //初始化 Memory attributes 配置
+    //Memory attributes 简单来说就是将 Memory 加上了几种属性，每种属性都会影响 Memory 的读写策略
+    //因为 Memory 读写策略是非常复杂的，比如一段内存区域指向的是一个 FIFO 设备，对内存的读写有严格的时序要求，则需要配置 Memory attributes 来禁止 CPU 读写重排，Cache 等等优化，因为这些对于这段 Memory 没有意义，还会影响数据的读写的正确性
     /* Initialize Memory Attribute Indirection Register */
     movlit  tmp, MMU_MAIR_VAL
     msr     mair_el1, tmp
@@ -251,22 +268,34 @@ FUNCTION(_start)
 
     isb
 
+    //下面代码打开 MMU
+    //建议参考 http://www.wowotech.net/linux_kenrel/turn-on-mmu.html
+
     /* Write ttbr with phys addr of the translation table */
+    //idmap_pg_dir是为turn on MMU准备的一致性映射，物理地址的高16bit都是0，因此identity mapping必定是选择TTBR0_EL1指向的各级地址翻译表。
+    //后续当系统运行之后，在进程切换的时候，会修改TTBR0的值，切换到真实的进程地址空间上去。
+    //TTBR1用于kernel space，所有的内核线程都是共享一个空间就是swapper_pg_dir
     msr     ttbr0_el1, page_table0
     msr     ttbr1_el1, page_table1
+
+    //内存栅栏 
     isb
 
+    //保存 EL1 状态的异常向量表
     /* Read SCTLR */
     mrs     tmp, sctlr_el1
 
+    //打开 MMU
     /* Turn on the MMU */
     orr     tmp, tmp, #0x1
 
+    //恢复 EL1 状态的异常向量表
     /* Write back SCTLR */
     msr     sctlr_el1, tmp
 .Lmmu_on_pc:
     isb
 
+    //因为前面刚打开了 MMU，则下面的地址都要是虚拟地址了，首先要映射 PC 的地址到虚拟地址
     // Map our current physical PC to the virtual PC and jump there.
     // PC = next_PC - __code_start + kernel_vaddr
     adr     tmp, .Lmmu_on_vaddr
@@ -276,6 +305,7 @@ FUNCTION(_start)
     br      tmp
 
 .Lmmu_on_vaddr:
+
 
     /* Disable trampoline page-table in ttbr0 */
     movlit  tmp, MMU_TCR_FLAGS_KERNEL
@@ -312,6 +342,7 @@ FUNCTION(_start)
     // Don't leak the value to other code.
     mov     x0, xzr
 
+    //跳转到内核 C 代码入口
     bl  lk_main
     b   .
 

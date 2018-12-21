@@ -165,6 +165,7 @@ static inline zx_status_t _arm64_boot_map(pte_t* kernel_table0,
     return ZX_OK;
 }
 
+//创建 1/2/3 级页表
 // called from start.S to configure level 1-3 page tables to map the kernel wherever it is located physically
 // to KERNEL_BASE
 __NO_SAFESTACK
