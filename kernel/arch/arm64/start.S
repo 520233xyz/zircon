@@ -123,7 +123,7 @@ FUNCTION(_start)
 .Lbss_loop_done:
 
     /* set up a functional stack pointer */
-    //设定内核地址
+    //设定内核栈地址
     adr_global tmp, boot_cpu_kstack_end
     mov     sp, tmp
 
@@ -133,6 +133,7 @@ FUNCTION(_start)
     bl      boot_alloc_init
 
     /* save the physical address the kernel is loaded at */
+    //保存内核开始地址到 kernel_base_phys 全局变量
     adr_global x0, __code_start
     adr_global x1, kernel_base_phys
     str     x0, [x1]
@@ -140,23 +141,51 @@ FUNCTION(_start)
     /* set up the mmu according to mmu_initial_mappings */
 
     /* clear out the kernel translation table */
+
     mov     tmp, #0
+
+//清除内核虚地址转换表  
 .Lclear_top_page_table_loop:
+
+    //遍历转换表中的所有条目并设置 0
+    /**
+        等价于
+        for(int tmp = 0;tmp < MMU_KERNEL_PAGE_TABLE_ENTRIES_TOP;tmp++) {
+            page_table1[tmp] = 0;
+        }
+
+    关于 xzr 寄存器 https://community.arm.com/processors/f/discussions/3185/wzr-xzr-register-s-purpose
+    **/
     str     xzr, [page_table1, tmp, lsl #3]
     add     tmp, tmp, #1
     cmp     tmp, #MMU_KERNEL_PAGE_TABLE_ENTRIES_TOP
     bne     .Lclear_top_page_table_loop
 
-    /* void arm64_boot_map(pte_t* kernel_table0, vaddr_t vaddr, paddr_t paddr, size_t len, pte_t flags); */
+    /**
 
+        在初始化阶段，我们mapping三段地址，
+        第一段是identity mapping，其实就是把物理地址mapping到物理地址上去，在打开MMU的时候需要这样的mapping（ARM ARCH强烈推荐这么做的）。
+        第二段是kernel image mapping，内核代码欢快的执行当然需要将kernel running需要的地址（kernel txt、dernel rodata、data、bss等等）进行映射了。
+        第三段是blob memory对应的mapping。
+
+    **/
+
+    
+    //准备调用 C 函数 arm64_boot_map
+    //1.该函数任务是帮内核映射物理内存
+    //先准备 5 个参数 x0-x4 寄存器保存函数参数
+    /* void arm64_boot_map(pte_t* kernel_table0, vaddr_t vaddr, paddr_t paddr, size_t len, pte_t flags); */
     /* map a large run of physical memory at the base of the kernel's address space */
     mov     x0, page_table1
     mov     x1, KERNEL_ASPACE_BASE
     mov     x2, 0
     mov     x3, ARCH_PHYSMAP_SIZE
     movlit  x4, MMU_PTE_KERNEL_DATA_FLAGS
+    //调用 arm64_boot_map *
     bl      arm64_boot_map
 
+    //类似上
+    //2.映射内核的地址
     /* map the kernel to a fixed address */
     /* note: mapping the kernel here with full rwx, this will get locked down later in vm initialization; */
     mov     x0, page_table1
@@ -174,6 +203,9 @@ FUNCTION(_start)
     /* Zero tt_trampoline translation tables */
     mov     tmp, #0
 .Lclear_tt_trampoline:
+
+    //同上清除 tt_trampoline 转换表
+    //循环 page_table0 置 0
     str     xzr, [page_table0, tmp, lsl#3]
     add     tmp, tmp, #1
     cmp     tmp, #MMU_PAGE_TABLE_ENTRIES_IDENT
