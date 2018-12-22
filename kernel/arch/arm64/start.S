@@ -123,7 +123,7 @@ FUNCTION(_start)
 .Lbss_loop_done:
 
     /* set up a functional stack pointer */
-    //设定内核栈地址
+    //设定内核栈地址,准备调用 C 代码
     adr_global tmp, boot_cpu_kstack_end
     mov     sp, tmp
 
@@ -316,12 +316,16 @@ FUNCTION(_start)
     tlbi    vmalle1
     isb
 
+    //如果不是 prim 内核，则直接跳到 secondary_boot 代码，跳过 lk_main
     cbnz    cpuid, .Lsecondary_boot
 
+    //重新设置 CPU 内核的栈指针，因为现在 MMU 已经打开，需要使用虚拟地址
     // set up the boot stack for real
     adr_global tmp, boot_cpu_kstack_end
     mov     sp, tmp
 
+
+    //配置 Stack Guard，其实就是在栈末尾设置一个页中断，如果程序读写到这里，代表栈溢出，触发异常
     // Set the thread pointer early so compiler-generated references
     // to the stack-guard and unsafe-sp slots work.  This is not a
     // real 'struct thread' yet, just a pointer to (past, actually)
@@ -347,6 +351,8 @@ FUNCTION(_start)
     b   .
 
 .Lsecondary_boot:
+
+    //配置其他 CPU 内核的栈指针
     bl      arm64_get_secondary_sp
     cbz     x0, .Lunsupported_cpu_trap
     mov     sp, x0
@@ -355,6 +361,7 @@ FUNCTION(_start)
     bl      arm64_secondary_entry
 
 .Lunsupported_cpu_trap:
+    //其他 CPU 内核初始化完毕
     wfe
     b       .Lunsupported_cpu_trap
 END_FUNCTION(_start)

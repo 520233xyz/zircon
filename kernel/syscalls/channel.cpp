@@ -54,13 +54,16 @@ zx_status_t sys_channel_create(uint32_t options,
     if (options != 0u)
         return ZX_ERR_INVALID_ARGS;
 
+    //当前的线程调度器
     auto up = ProcessDispatcher::GetCurrent();
+    //检查是否允许创建 Channel
     zx_status_t res = up->QueryPolicy(ZX_POL_NEW_CHANNEL);
     if (res != ZX_OK)
         return res;
 
     fbl::RefPtr<Dispatcher> mpd0, mpd1;
     zx_rights_t rights;
+    //开始创建 Channel *
     zx_status_t result = ChannelDispatcher::Create(&mpd0, &mpd1, &rights);
     if (result != ZX_OK)
         return result;

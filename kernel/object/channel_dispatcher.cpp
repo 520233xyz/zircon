@@ -36,6 +36,7 @@ KCOUNTER(channel_packet_depth_256, "kernel.channel.depth.256");
 KCOUNTER(channel_packet_depth_unbounded, "kernel.channel.depth.unbounded");
 
 // static
+//创建 Channel
 zx_status_t ChannelDispatcher::Create(fbl::RefPtr<Dispatcher>* dispatcher0,
                                       fbl::RefPtr<Dispatcher>* dispatcher1,
                                       zx_rights_t* rights) {
