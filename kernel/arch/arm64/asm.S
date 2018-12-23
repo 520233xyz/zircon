@@ -104,7 +104,7 @@ FUNCTION(arm64_elX_to_el1)
     /* Ensure EL1 timers are properly configured, disable EL2 trapping of
         EL1 access to timer control registers.  Also clear virtual offset.
     */
-    //检查并配置 EL1 的定时器
+    //检查并配置时钟
     mrs x9, cnthctl_el2
     orr x9, x9, #3
     msr cnthctl_el2, x9

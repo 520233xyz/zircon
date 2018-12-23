@@ -59,7 +59,7 @@ END_FUNCTION(arch_sync_cache_range)
  *      should only be used early in boot, prior to enabling mmu/cache
  */
 
- //关闭 MMU 和 Cache
+ //使 Cache 失效
 FUNCTION(arch_invalidate_cache_all)
     mrs     x0, clidr_el1
     and     w3, w0, #0x07000000

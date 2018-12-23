@@ -60,7 +60,7 @@ FUNCTION(_start)
     //由于 arm64_elX_to_el1 程序末尾执行了 eret 跳转到了 EL1 等级，那么下面代码在 EL1 运行。
     bl      arm64_elX_to_el1
 
-    //禁用所有 MMU/Cache *
+    //使缓存失效 *
     bl      arch_invalidate_cache_all
 
     /* enable caches so atomics and spinlocks work */
@@ -74,7 +74,7 @@ FUNCTION(_start)
 
     // This can be any arbitrary (page-aligned) address >= KERNEL_ASPACE_BASE.
     // TODO(SEC-31): Choose it randomly.
-    //加载 kernel_relocated_base 段地址,内核代码开始地址存在的 4K 内存页基地址
+    //加载 kernel_relocated_base 段地址
     //内核重定向的基地址，即内核开始的虚拟地址
     adr_global  tmp, kernel_relocated_base
     //负值给 kernel_vaddr
@@ -97,7 +97,7 @@ FUNCTION(_start)
     //将内核代码开始的虚拟地址保存到 x0 中
     mov     x0, kernel_vaddr
     //跳转到 __data_end *
-    //__data_end 指向 kernel_image 段地址
+    //__data_end 指向 image.S - apply_fixups 方法
     bl      __data_end
 
     /* clear out the kernel's bss using current physical location */
@@ -319,7 +319,7 @@ FUNCTION(_start)
     //如果不是 prim 内核，则直接跳到 secondary_boot 代码，跳过 lk_main
     cbnz    cpuid, .Lsecondary_boot
 
-    //重新设置 CPU 内核的栈指针，因为现在 MMU 已经打开，需要使用虚拟地址
+    //重新设置 prime CPU 的内核栈指针，因为现在 MMU 已经打开，需要使用虚拟地址
     // set up the boot stack for real
     adr_global tmp, boot_cpu_kstack_end
     mov     sp, tmp
