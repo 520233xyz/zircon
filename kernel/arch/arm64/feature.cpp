@@ -31,13 +31,18 @@ static void parse_ccsid(arm64_cache_desc_t* desc, uint64_t ccsid) {
     desc->line_size = 1u << (BITS(ccsid, 2, 0) + 4);
 }
 
+// 读取 ARM64 CPU 的 Cache 信息
 void arm64_get_cache_info(arm64_cache_info_t* info) {
     uint64_t temp = 0;
 
+    // http://infocenter.arm.com/help/index.jsp?topic=/com.arm.doc.100048_0002_05_en/jfa1406793234300.html
     uint64_t sysreg = ARM64_READ_SYSREG(clidr_el1);
     info->inner_boundary = (uint8_t)BITS_SHIFT(sysreg, 32, 30);
+    //L1 Cache
     info->lou_u = (uint8_t)BITS_SHIFT(sysreg, 29, 27);
+    //L3 Cache
     info->loc = (uint8_t)BITS_SHIFT(sysreg, 26, 24);
+    //L2 Cache
     info->lou_is = (uint8_t)BITS_SHIFT(sysreg, 23, 21);
     for (int i = 0; i < 7; i++) {
         uint8_t ctype = (sysreg >> (3 * i)) & 0x07;
@@ -199,6 +204,9 @@ void arm64_feature_init() {
         arm64_icache_size = (1u << arm64_icache_shift);
 
         // parse the ISA feature bits
+        // 收集 CPU 支持的加密算法
+        // 每个内核都要跑一次
+        // http://infocenter.arm.com/help/index.jsp?topic=/com.arm.doc.100048_0002_05_en/jfa1406793234300.html
         arm64_features |= ZX_HAS_CPU_FEATURES;
         uint64_t isar0 = ARM64_READ_SYSREG(id_aa64isar0_el1);
         if (BITS_SHIFT(isar0, 7, 4) >= 1) {
@@ -234,16 +242,22 @@ void arm64_feature_init() {
         if (BITS_SHIFT(isar0, 47, 44) >= 1) {
             arm64_features |= ZX_ARM64_FEATURE_ISA_DP;
         }
-
+        
+        // 是否支持数据高速缓存
+        // http://infocenter.arm.com/help/index.jsp?topic=/com.arm.doc.100048_0002_05_en/jfa1406793234300.html
         uint64_t isar1 = ARM64_READ_SYSREG(id_aa64isar1_el1);
         if (BITS_SHIFT(isar1, 3, 0) >= 1) {
             arm64_features |= ZX_ARM64_FEATURE_ISA_DPB;
         }
 
+        // 是否支持浮点计算
+        // http://infocenter.arm.com/help/index.jsp?topic=/com.arm.doc.100048_0002_05_en/jfa1406793234300.html
         uint64_t pfr0 = ARM64_READ_SYSREG(id_aa64pfr0_el1);
         if (BITS_SHIFT(pfr0, 19, 16) < 0b1111) {
             arm64_features |= ZX_ARM64_FEATURE_ISA_FP;
         }
+
+        // 是否支持 SIMD，即单指令多数据集指令，例如向量运算
         if (BITS_SHIFT(pfr0, 23, 20) < 0b1111) {
             arm64_features |= ZX_ARM64_FEATURE_ISA_ASIMD;
         }
@@ -253,6 +267,7 @@ void arm64_feature_init() {
     arm64_get_cache_info(&(cache_info[cpu]));
 
     // check to make sure implementation supports 16 bit asids
+    // 是否支持 address space ID
     uint64_t mmfr0 = ARM64_READ_SYSREG(ID_AA64MMFR0_EL1);
     ASSERT((mmfr0 & ARM64_MMFR0_ASIDBITS_MASK) == ARM64_MMFR0_ASIDBITS_16);
 }
