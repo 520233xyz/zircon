@@ -147,13 +147,19 @@ zx_status_t arm64_free_secondary_stack(uint cluster, uint cpu) {
     return status;
 }
 
+//初始化每个 CPU 内核
 static void arm64_cpu_early_init() {
     // Make sure the per cpu pointer is set up.
+    // 检查 CPU 指针
     arm64_init_percpu_early();
 
+    // 设置 EL1 的异常向量表
     // Set the vector base.
     ARM64_WRITE_SYSREG(VBAR_EL1, (uint64_t)&arm64_el1_exception_base);
 
+
+    // 系统控制寄存器（SCTLR）用于控制标准内存和系统设备，并为在硬件内核中实现的功能提供状态信息。
+    // https://www.jianshu.com/p/885913b7201c
     // Set some control bits in sctlr.
     uint64_t sctlr = ARM64_READ_SYSREG(sctlr_el1);
     sctlr |= SCTLR_EL1_UCI | SCTLR_EL1_UCT | SCTLR_EL1_DZE | SCTLR_EL1_SA0 | SCTLR_EL1_SA;
@@ -161,12 +167,15 @@ static void arm64_cpu_early_init() {
     ARM64_WRITE_SYSREG(sctlr_el1, sctlr);
 
     // Save all of the features of the cpu.
+    // 收集 CPU 支持的 Feature *
     arm64_feature_init();
 
+    // 打开 CPU 计数器， 读取这个 PMCCNTR_EL0 寄存器值，就可以知道当前 CPU 已运行了多少 Cycle。
     // Enable cycle counter.
     ARM64_WRITE_SYSREG(pmcr_el0, PMCR_EL0_ENABLE_BIT | PMCR_EL0_LONG_COUNTER_BIT);
     ARM64_WRITE_SYSREG(pmcntenset_el0, PMCNTENSET_EL0_ENABLE);
 
+    // 使用户态可以读取计数寄存器
     // Enable user space access to cycle counter.
     ARM64_WRITE_SYSREG(pmuserenr_el0, PMUSERENR_EL0_ENABLE);
 
