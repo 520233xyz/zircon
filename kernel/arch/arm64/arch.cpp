@@ -184,16 +184,25 @@ static void arm64_cpu_early_init() {
     ARM64_WRITE_SYSREG(oslar_el1, 0x0);
 
     // Enable user space access to virtual counter (CNTVCT_EL0).
+    // 使用户态可以读取 virtual counter
     ARM64_WRITE_SYSREG(cntkctl_el1, CNTKCTL_EL1_ENABLE_VIRTUAL_COUNTER);
-
+    
+    // http://infocenter.arm.com/help/index.jsp?topic=/com.arm.doc.100048_0002_05_en/jfa1406793259505.html
+    // 启用本地内核调试
+    // 监视 debug 事件，启用断点/监视/向量调试功能
     ARM64_WRITE_SYSREG(mdscr_el1, MSDCR_EL1_INITIAL_VALUE);
 
+    // 开启快速中断
     arch_enable_fiqs();
 }
 
+//平台架构初始化
 void arch_early_init() {
-    arm64_cpu_early_init();
 
+    // 初始化 ARM64 *
+    arm64_cpu_early_init();
+    // 初始化 mmu 映射
+    // 这个没实现，因为在前面汇编代码已经映射过了，这里只是一个 Hook
     platform_init_mmu_mappings();
 }
 

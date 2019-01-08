@@ -303,18 +303,25 @@ static void process_zbi(zbi_header_t* root) {
     image.ForEach(process_zbi_item, nullptr);
 }
 
+// 平台初始化 ARM64 *
 void platform_early_init(void) {
     // if the zbi_paddr variable is -1, it was not set
     // in start.S, so we are in a bad place.
+
+    // 内核启动镜像的物理地址，这是一个内核启动参数
     if (zbi_paddr == -1UL) {
         panic("no zbi_paddr!\n");
     }
 
+    // 返回内核启动镜像的虚拟地址
     void* zbi_vaddr = paddr_to_physmap(zbi_paddr);
 
+
     // initialize the boot memory reservation system
+    // 把内核镜像所在的内存区域加入 PMM(物理内存管理器) 的保留内存区域列表
     boot_reserve_init();
 
+    // ramdisk 的 base 地址
     if (zbi_vaddr && is_zbi_container(zbi_vaddr)) {
         zbi_header_t* header = (zbi_header_t*)zbi_vaddr;
 
@@ -329,6 +336,9 @@ void platform_early_init(void) {
     }
 
     zbi_header_t* zbi = reinterpret_cast<zbi_header_t*>(ramdisk_base);
+
+    // 处理其他 zbi(Zircon Boot Image) *
+    // Zircon 内核启动镜像在代码中被抽象成一个个 ZBI，不仅仅内核镜像是一个 ZBI，内核驱动/Ramdisk 等也是一个个 ZBI
     // walk the zbi structure and process all the items
     process_zbi(zbi);
 
@@ -336,24 +346,31 @@ void platform_early_init(void) {
     dlog_bypass_init();
 
     // bring up kernel drivers after we have mapped our peripheral ranges
+    // 初始化内核设备驱动 *
     pdev_init(zbi);
 
     // Serial port should be active now
 
+    // 读内核启动参数 halt-on-panic
     // Read cmdline after processing zbi, which may contain cmdline data.
     halt_on_panic = cmdline_get_bool("kernel.halt-on-panic", false);
 
     // Check if serial should be enabled
+    // 串口是否打开
     const char* serial_mode = cmdline_get("kernel.serial");
     uart_disabled = (serial_mode != NULL && !strcmp(serial_mode, "none"));
 
     // add the ramdisk to the boot reserve memory list
+
+    // 把 ramdisk 镜像所在的内存区域加入 PMM(物理内存管理器) 的保留内存区域列表
     paddr_t ramdisk_start_phys = physmap_to_paddr(ramdisk_base);
     paddr_t ramdisk_end_phys = ramdisk_start_phys + ramdisk_size;
     dprintf(INFO, "reserving ramdisk phys range [%#" PRIx64 ", %#" PRIx64 "]\n",
             ramdisk_start_phys, ramdisk_end_phys - 1);
     boot_reserve_add_range(ramdisk_start_phys, ramdisk_size);
 
+
+    //如果配置了内存限制，则初始化内存限制
     // check if a memory limit was passed in via kernel.memory-limit-mb and
     // find memory ranges to use if one is found.
     zx_status_t status = memory_limit_init();

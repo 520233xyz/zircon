@@ -52,14 +52,21 @@ void lk_main() {
 
     // early arch stuff
     lk_primary_cpu_init_level(LK_INIT_LEVEL_EARLIEST, LK_INIT_LEVEL_ARCH_EARLY - 1);
+
+    // CPU 架构早期初始化 *
     arch_early_init();
 
     // do any super early platform initialization
     lk_primary_cpu_init_level(LK_INIT_LEVEL_ARCH_EARLY, LK_INIT_LEVEL_PLATFORM_EARLY - 1);
+
+    // 平台早期初始化 *
     platform_early_init();
 
     // do any super early target initialization
     lk_primary_cpu_init_level(LK_INIT_LEVEL_PLATFORM_EARLY, LK_INIT_LEVEL_TARGET_EARLY - 1);
+
+    // 目标设备初始化 *
+    // 实际还没实现
     target_early_init();
 
     dprintf(INFO, "\nwelcome to Zircon\n\n");
@@ -68,6 +75,8 @@ void lk_main() {
 
     lk_primary_cpu_init_level(LK_INIT_LEVEL_TARGET_EARLY, LK_INIT_LEVEL_VM_PREHEAP - 1);
     dprintf(SPEW, "initializing vm pre-heap\n");
+
+    // 
     vm_init_preheap();
 
     // bring up the kernel heap
