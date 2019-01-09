@@ -127,6 +127,8 @@ static int bootstrap2(void*) {
     // initialize the rest of the platform
     dprintf(SPEW, "initializing platform\n");
     lk_primary_cpu_init_level(LK_INIT_LEVEL_ARCH, LK_INIT_LEVEL_PLATFORM - 1);
+
+    // 平台初始化 *
     platform_init();
 
     // initialize the target
@@ -162,6 +164,8 @@ void lk_init_secondary_cpus(uint secondary_cpu_count) {
                 secondary_cpu_count, SMP_MAX_CPUS);
         secondary_cpu_count = SMP_MAX_CPUS - 1;
     }
+
+    // 为每个 CPU 创建 IDLE 线程
     for (uint i = 0; i < secondary_cpu_count; i++) {
         thread_t* t = thread_create_idle_thread(i + 1);
         if (!t) {

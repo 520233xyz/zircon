@@ -216,6 +216,7 @@ void arch_init() TA_NO_THREAD_SAFETY_ANALYSIS {
 
     arm64_feature_debug(true);
 
+    // 读取 CPU 数量
     uint32_t max_cpus = arch_max_num_cpus();
     uint32_t cmdline_max_cpus = cmdline_get_uint32("kernel.smp.maxcpus", max_cpus);
     if (cmdline_max_cpus > max_cpus || cmdline_max_cpus <= 0) {
@@ -225,13 +226,17 @@ void arch_init() TA_NO_THREAD_SAFETY_ANALYSIS {
 
     secondaries_to_init = cmdline_max_cpus - 1;
 
+    // 初始化非 prime CPU *
     lk_init_secondary_cpus(secondaries_to_init);
 
     LTRACEF("releasing %d secondary cpus\n", secondaries_to_init);
 
+    // 释放启动锁
+    // 前面在汇编代码等待的非 prime CPU 可以继续执行了
     // Release the secondary cpus.
     spin_unlock(&arm_boot_cpu_lock);
 
+    // 为了让改动立刻写入内存，让其他 CPU 立刻可见，需要 flush cache
     // Flush the release of the lock, since the secondary cpus are running without cache on.
     arch_clean_cache_range((addr_t)&arm_boot_cpu_lock, sizeof(arm_boot_cpu_lock));
 }

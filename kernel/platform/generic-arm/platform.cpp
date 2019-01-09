@@ -156,7 +156,9 @@ static zx_status_t platform_start_cpu(uint cluster, uint cpu) {
 }
 
 static void platform_cpu_init(void) {
+    // 遍历所有簇
     for (uint cluster = 0; cluster < cpu_cluster_count; cluster++) {
+        // 遍历簇内所有 CPU 内核
         for (uint cpu = 0; cpu < cpu_cluster_cpus[cluster]; cpu++) {
             if (cluster != 0 || cpu != 0) {
                 // create a stack for the cpu we're about to start
@@ -393,6 +395,7 @@ void platform_early_init(void) {
 }
 
 void platform_init(void) {
+    // 平台 CPU 初始化 *
     platform_cpu_init();
 }
 
