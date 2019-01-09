@@ -76,27 +76,36 @@ void lk_main() {
     lk_primary_cpu_init_level(LK_INIT_LEVEL_TARGET_EARLY, LK_INIT_LEVEL_VM_PREHEAP - 1);
     dprintf(SPEW, "initializing vm pre-heap\n");
 
-    // 
+    // 内核堆初始化之前 *
     vm_init_preheap();
 
     // bring up the kernel heap
     lk_primary_cpu_init_level(LK_INIT_LEVEL_VM_PREHEAP, LK_INIT_LEVEL_HEAP - 1);
     dprintf(SPEW, "initializing heap\n");
+
+    // 内核堆初始化 *
     heap_init();
 
     lk_primary_cpu_init_level(LK_INIT_LEVEL_HEAP, LK_INIT_LEVEL_VM - 1);
     dprintf(SPEW, "initializing vm\n");
+
+    // 虚拟内存初始化 *
     vm_init();
 
     // initialize the kernel
     lk_primary_cpu_init_level(LK_INIT_LEVEL_VM, LK_INIT_LEVEL_KERNEL - 1);
     dprintf(SPEW, "initializing kernel\n");
+
+    // 内核初始化 *
     kernel_init();
 
     lk_primary_cpu_init_level(LK_INIT_LEVEL_KERNEL, LK_INIT_LEVEL_THREADING - 1);
 
     // create a thread to complete system initialization
     dprintf(SPEW, "creating bootstrap completion thread\n");
+
+    // 创建 bootstrap2 线程
+    // 由 bootstrap2 线程完成剩下的初始化工作
     thread_t* t = thread_create("bootstrap2", &bootstrap2, NULL, DEFAULT_PRIORITY);
     thread_set_cpu_affinity(t, cpu_num_to_mask(0));
     thread_detach(t);
@@ -106,10 +115,13 @@ void lk_main() {
     thread_become_idle();
 }
 
+// bootstrap2 线程工作函数
 static int bootstrap2(void*) {
     dprintf(SPEW, "top of bootstrap2()\n");
 
     lk_primary_cpu_init_level(LK_INIT_LEVEL_THREADING, LK_INIT_LEVEL_ARCH - 1);
+
+    // CPU 架构初始化 *
     arch_init();
 
     // initialize the rest of the platform

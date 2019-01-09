@@ -15,8 +15,12 @@
 
 void kernel_init(void) {
     dprintf(SPEW, "initializing mp\n");
+
+    // 多核初始化 *
     mp_init();
 
     dprintf(SPEW, "initializing timers\n");
+
+    // 计时器队列初始化 *
     timer_queue_init();
 }

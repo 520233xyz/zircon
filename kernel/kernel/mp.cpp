@@ -40,6 +40,7 @@ struct mp_state mp __CPU_ALIGN_EXCLUSIVE;
 struct mp_sync_context;
 static void mp_sync_task(void* context);
 
+// 多核初始化
 void mp_init(void) {
     mutex_init(&mp.hotplug_lock);
     mp.ipi_task_lock = SPIN_LOCK_INITIAL_VALUE;

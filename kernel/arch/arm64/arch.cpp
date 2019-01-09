@@ -206,7 +206,10 @@ void arch_early_init() {
     platform_init_mmu_mappings();
 }
 
+// 架构初始化，由 bootstrap2 线程完成
 void arch_init() TA_NO_THREAD_SAFETY_ANALYSIS {
+
+    // 主要任务是初始化每个 CPU 的中断
     arch_mp_init_percpu();
 
     dprintf(INFO, "ARM boot EL%lu\n", arm64_get_boot_el());

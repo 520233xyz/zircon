@@ -80,6 +80,7 @@ void vm_init_preheap() {
     LTRACE_ENTRY;
 
     // allow the vmm a shot at initializing some of its data structures
+    // 构造代表内核空间的 VmAspace 对象  
     VmAspace::KernelAspaceInitPreHeap();
 
     // mark the physical pages used by the boot time allocator
@@ -119,6 +120,7 @@ void vm_init() {
 
     VmAspace* aspace = VmAspace::kernel_aspace();
 
+    // 内核镜像的各个段，以及读写策略
     // we expect the kernel to be in a temporary mapping, define permanent
     // regions for those now
     struct temp_region {
@@ -153,6 +155,7 @@ void vm_init() {
         },
     };
 
+    // 便历上面的几个段，并设置策略
     for (uint i = 0; i < fbl::count_of(regions); ++i) {
         temp_region* region = &regions[i];
         ASSERT(IS_PAGE_ALIGNED(region->base));
@@ -160,15 +163,19 @@ void vm_init() {
         dprintf(INFO, "VM: reserving kernel region [%#" PRIxPTR ", %#" PRIxPTR ") flags %#x name '%s'\n",
                 region->base, region->base + region->size, region->arch_mmu_flags, region->name);
 
+        // 在vmm中标记一块虚拟内存，这块虚拟内存抽象为VmRegion类，拥有自己的底层mmu相关的配置
         zx_status_t status = aspace->ReserveSpace(region->name, region->size, region->base);
         ASSERT(status == ZX_OK);
+        // 对某VmRegion对应的虚拟内存设置内存保护的相关参数
         status = ProtectRegion(aspace, region->base, region->arch_mmu_flags);
         ASSERT(status == ZX_OK);
     }
 
+    // 标记映射表
     // reserve the kernel aspace where the physmap is
     aspace->ReserveSpace("physmap", PHYSMAP_SIZE, PHYSMAP_BASE);
 
+// 随机内核布局，这个是为安全考虑的，避免恶意代码猜到内核在内存中的分布
 #if !DISABLE_KASLR // Disable random memory padding for KASLR
     // Reserve random padding of up to 64GB after first mapping. It will make
     // the adjacent memory mappings (kstack_vmar, arena:handles and others) at

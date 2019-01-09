@@ -129,6 +129,8 @@ void dump_stats() {
 } // namespace
 
 void heap_init() {
+    // 内核堆由 cmpctmalloc 实现
+    // 初始化 cmpctmalloc
     cmpct_init();
 }
 

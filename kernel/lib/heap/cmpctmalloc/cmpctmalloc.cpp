@@ -23,6 +23,92 @@
 #include <platform.h>
 #include <trace.h>
 
+/**
+    Malloc实施针对空间进行了调整。
+
+分配策略使用全局互斥锁进行。空闲列表条目保存在链接列表中，每个二进制数量级具有8种不同的大小，标题大小为两个单词，并且可以自由地进行合并。
+
+## Concepts ##
+
+OS分配：
+  使用heap_page_alloc（）从操作系统分配的连续页面范围，
+  通常通过heap_grow（）。初步布局：
+
+  低addr =>
+    header_t left_sentinel  - 标记为已分配，| left |指针为NULL。
+    free_t memory_area  - 标记为空闲，大小合适，
+                          并指向一个空闲的桶。
+    [可用内存的大部分]
+    header_t right_sentinel  - 标记为已分配，大小为零
+  <=高地址
+
+  对于正常分配，将空闲内存区域添加到
+  适当的空闲存储桶，稍后在cmpct_alloc（）中获取
+  逻辑。对于大量分配，该区域会跳过主要空闲存储桶
+  并通过| free_t ** bucket |直接返回PARAM。
+
+  cmpctmalloc没有保留操作系统分配列表;每个都是空闲的
+  当它的所有内存区域都空闲时，它本身就是操作系统。
+
+内存区域：
+  OS分配的子范围。用来满足
+  cmpct_alloc（）/ cmpct_memalign（）调用。可以空闲，空闲住
+  存储桶，或者可以由用户分配和管理。
+
+  空闲和分配的内存区域始终以header_t开头，
+  然后是该区域的可用内存。 header_t.size包含的大小
+  标题。 untag（header_t.left）指向前一个区域的header_t。
+
+  header_t.left的低位包含有关该区域的其他标志：
+   -  FREE_BIT：该区域是空闲的，住在一个空闲的桶里。
+  不应直接检查这些位;使用is_tagged_as _ *（）
+  功能。
+
+  如果该区域是空闲的（is_tagged_as_free（header_t *）），则该区域的标题
+  包括由free_t定义的双向链接空闲列表指针（这是一个
+  header_t overlay）。这些指针用于链接自由区域
+  适当大小的空闲水桶。
+
+正常（小/非大）分配：
+  分配小于HEAP_LARGE_ALLOC_BYTES，可以空闲使用
+  桶。
+
+大量分配：
+  分配超过HEAP_LARGE_ALLOC_BYTES。不再允许这样做。
+
+空闲水桶：
+  空闲列表条目保存在链接列表中，每个二进制文件有8种不同的大小
+  数量级：heap.free_lists [NUMBER_OF_BUCKETS]
+
+  分配总是四舍五入到最近的桶大小。这个会
+  似乎浪费了内存，但事实上它避免了一些碎片。
+
+  考虑两个大小为512和576（512 + 64）的桶。也许这个计划
+  由于某种原因，通常会分配528个字节的对象。当我们需要分配时
+  528个字节，我们将其舍入到576个字节。当它被释放时，它进入了
+  576字节桶，可用于下一个常见的528字节
+  分配。
+
+  如果我们没有对分配进行舍入，那么（假设没有合并）
+  可能）我们必须将释放的528个字节放在512字节中
+  桶，因为只有大于或等于576字节的内存区域可以去
+  在576字节桶中。下次我们需要分配一个528字节的对象
+  我们不看512字节桶，因为我们要确定第一个
+  我们看的内存区域足够大，以避免搜索长链
+  空闲列表中的内存区域太小。我们找不到528
+  字节空间，并且必须从大的空间中划出一个新的528字节区域
+  空闲内存区，使碎片变得更糟。
+
+cmpct_free（）行为：
+  释放的存储区域与自由的左/右邻居急切地合并。如果
+  新的空闲区域涵盖整个操作系统分配（即其左侧和右侧）
+  邻居都是哨兵，OS分配返回给操作系统。
+
+  例外：在边缘即堆上时避免OS free / alloc churn
+  将尝试保留一个完全空闲的非大型操作系统分配，而不是
+  将其返回给操作系统。请参阅cached_os_alloc。
+ **/
+
 // Malloc implementation tuned for space.
 //
 // Allocation strategy takes place with a global mutex.  Freelist entries are
@@ -1115,12 +1201,15 @@ static ssize_t heap_grow(size_t size) {
     return size;
 }
 
+// cmpct 堆初始化
 void cmpct_init(void) {
     LTRACE_ENTRY;
 
+    // 初始化全局互斥锁
     // Create a mutex.
     mutex_init(&theheap.lock);
 
+    // 初始化空闲列表
     // Initialize the free list.
     for (int i = 0; i < NUMBER_OF_BUCKETS; i++) {
         theheap.free_lists[i] = NULL;
