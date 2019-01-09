@@ -106,12 +106,15 @@ void lk_main() {
 
     // 创建 bootstrap2 线程
     // 由 bootstrap2 线程完成剩下的初始化工作
+    // 虽说是在 bootstrap2 线程中跑，但此时没有开启任务调度，所以实际还是在本线程
+    // 因此下面代码是顺序执行的
     thread_t* t = thread_create("bootstrap2", &bootstrap2, NULL, DEFAULT_PRIORITY);
     thread_set_cpu_affinity(t, cpu_num_to_mask(0));
     thread_detach(t);
     thread_resume(t);
 
     // become the idle thread and enable interrupts to start the scheduler
+    // 所有任务完成，直接称为 prime CPU 的 IDLE 线程
     thread_become_idle();
 }
 
@@ -134,6 +137,9 @@ static int bootstrap2(void*) {
     // initialize the target
     dprintf(SPEW, "initializing target\n");
     lk_primary_cpu_init_level(LK_INIT_LEVEL_PLATFORM, LK_INIT_LEVEL_TARGET - 1);
+
+    // 目标设备初始化
+    // Hook 未实现
     target_init();
 
     dprintf(SPEW, "moving to last init level\n");

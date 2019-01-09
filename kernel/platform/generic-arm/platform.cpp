@@ -155,11 +155,14 @@ static zx_status_t platform_start_cpu(uint cluster, uint cpu) {
     return ZX_OK;
 }
 
+// 初始化平台上的其他 CPU，CPU 热插拔？
 static void platform_cpu_init(void) {
     // 遍历所有簇
     for (uint cluster = 0; cluster < cpu_cluster_count; cluster++) {
         // 遍历簇内所有 CPU 内核
         for (uint cpu = 0; cpu < cpu_cluster_cpus[cluster]; cpu++) {
+
+            // 启动新增 CPU
             if (cluster != 0 || cpu != 0) {
                 // create a stack for the cpu we're about to start
                 zx_status_t status = arm64_create_secondary_stack(cluster, cpu);

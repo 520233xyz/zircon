@@ -57,6 +57,10 @@ enum OrderedLockTag { OrderedLock };
 enum AdoptLockTag { AdoptLock };
 
 // RAII type that automatically manages the duration of a lock acquisition.
+
+// 工具类
+// 完成在域开始初始化，在域结束销毁的工作
+// 举例就是锁
 template <typename LockType, typename Option = void>
 class __TA_SCOPED_CAPABILITY Guard {
     static_assert(
