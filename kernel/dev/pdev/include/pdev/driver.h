@@ -14,6 +14,7 @@ __BEGIN_CDECLS
 typedef void (*lk_pdev_init_hook)(const void* driver_data, uint32_t length);
 
 // for registering platform drivers
+// 内核驱动结构
 struct lk_pdev_init_struct {
     uint32_t type;          // driver type, as defined in <zircon/boot/kernel-drivers.h>
     lk_pdev_init_hook hook; // hook for driver init
@@ -21,6 +22,7 @@ struct lk_pdev_init_struct {
     const char* name;
 };
 
+// 驱动注册宏
 #define LK_PDEV_INIT(_name, _type, _hook, _level)                                                                      \
     __ALIGNED(sizeof(void*))                                                                                           \
     __USED __SECTION(".data.rel.ro.lk_pdev_init") static const struct lk_pdev_init_struct _dev_init_struct_##_name = { \

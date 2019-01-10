@@ -492,6 +492,7 @@ void timer_thaw_percpu(void) {
     update_platform_timer(cpu, deadline);
 }
 
+// 初始化每个 CPU 的计时器队列
 void timer_queue_init(void) {
     for (uint i = 0; i < SMP_MAX_CPUS; i++) {
         list_initialize(&percpu[i].timer_queue);

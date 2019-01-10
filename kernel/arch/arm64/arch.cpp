@@ -216,7 +216,7 @@ void arch_init() TA_NO_THREAD_SAFETY_ANALYSIS {
 
     arm64_feature_debug(true);
 
-    // 读取 CPU 数量
+    // 读取启动参数中配置的 CPU 数量
     uint32_t max_cpus = arch_max_num_cpus();
     uint32_t cmdline_max_cpus = cmdline_get_uint32("kernel.smp.maxcpus", max_cpus);
     if (cmdline_max_cpus > max_cpus || cmdline_max_cpus <= 0) {
@@ -227,6 +227,7 @@ void arch_init() TA_NO_THREAD_SAFETY_ANALYSIS {
     secondaries_to_init = cmdline_max_cpus - 1;
 
     // 初始化非 prime CPU *
+    // 主要任务是为非 prime cpu 创建 IDLE 线程
     lk_init_secondary_cpus(secondaries_to_init);
 
     LTRACEF("releasing %d secondary cpus\n", secondaries_to_init);

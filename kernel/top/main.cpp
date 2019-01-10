@@ -45,9 +45,12 @@ void lk_main() {
     dlog_bypass_init_early();
 
     // get us into some sort of thread context
+    // 初始化线程表 *
     thread_init_early();
 
     // deal with any static constructors
+    // 调用全局构造函数
+    // 全局构造函数即打了 __attribute__ ((constructor)) 的函数，将被编译器编译到 .init 段中
     call_constructors();
 
     // early arch stuff
@@ -77,6 +80,7 @@ void lk_main() {
     dprintf(SPEW, "initializing vm pre-heap\n");
 
     // 内核堆初始化之前 *
+    // 主要是配置页表和虚拟内存
     vm_init_preheap();
 
     // bring up the kernel heap

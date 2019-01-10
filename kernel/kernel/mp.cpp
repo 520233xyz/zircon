@@ -42,7 +42,9 @@ static void mp_sync_task(void* context);
 
 // 多核初始化
 void mp_init(void) {
+    // CPU 热插拔锁
     mutex_init(&mp.hotplug_lock);
+    // 核间中断任务表初始化
     mp.ipi_task_lock = SPIN_LOCK_INITIAL_VALUE;
     for (uint i = 0; i < fbl::count_of(mp.ipi_task_list); ++i) {
         list_initialize(&mp.ipi_task_list[i]);

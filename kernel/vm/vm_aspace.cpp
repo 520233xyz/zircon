@@ -56,7 +56,7 @@ void VmAspace::KernelAspaceInitPreHeap() TA_NO_THREAD_SAFETY_ANALYSIS {
     // the singleton kernel address space
 
     // 构造一个内核空间单例，因为这个函数只会在启动时调用，所以是这个对象是单例  
-    // VmAspace 即 Virtual Memory Arch Space，代表当前 CPU 架构虚拟内存空间的抽象
+    // VmAspace 即 Virtual Memory Address Space，代表当前 CPU 虚拟内存空间的抽象
     static VmAspace _kernel_aspace(KERNEL_ASPACE_BASE, KERNEL_ASPACE_SIZE, VmAspace::TYPE_KERNEL, "kernel");
 
     // the singleton dummy root vmar (used to break a reference cycle in

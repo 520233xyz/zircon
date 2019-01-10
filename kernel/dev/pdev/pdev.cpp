@@ -38,6 +38,7 @@ static void pdev_run_hooks(uint level) {
     const uint8_t* start = (uint8_t*)item + sizeof(zbi_header_t);
     const uint8_t* end = start + item->length;
 
+    // 遍历 Driver ZBI
     while (static_cast<size_t>(end - start) > sizeof(zbi_header_t)) {
         item = reinterpret_cast<const zbi_header_t*>(start);
         if (item->type == ZBI_TYPE_KERNEL_DRIVER) {
