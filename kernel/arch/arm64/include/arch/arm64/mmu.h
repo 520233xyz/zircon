@@ -395,6 +395,7 @@ __BEGIN_CDECLS
         ISB;                                                         \
     })
 
+// ARM64 支持 65535 个 ASID
 const size_t MMU_ARM64_ASID_BITS = 16;
 const uint16_t MMU_ARM64_GLOBAL_ASID = (1u << MMU_ARM64_ASID_BITS) - 1;
 const uint16_t MMU_ARM64_UNUSED_ASID = 0;

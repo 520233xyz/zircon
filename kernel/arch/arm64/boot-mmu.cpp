@@ -58,6 +58,7 @@ extern "C" pte_t* boot_alloc_ptable() {
     return ptr;
 }
 
+// 构建页表
 // inner mapping routine passed two helper routines
 __NO_SAFESTACK
 static inline zx_status_t _arm64_boot_map(pte_t* kernel_table0,
@@ -70,15 +71,21 @@ static inline zx_status_t _arm64_boot_map(pte_t* kernel_table0,
 
     // loop through the virtual range and map each physical page, using the largest
     // page size supported. Allocates necessar page tables along the way.
+
+    //1. 填充该页虚拟内存所对应的顶级页表(L0)
     size_t off = 0;
     while (off < len) {
         // make sure the level 1 pointer is valid
+        // L0 页表的 index 
         size_t index0 = vaddr_to_l0_index(vaddr + off);
         pte_t* kernel_table1 = nullptr;
         switch (kernel_table0[index0] & MMU_PTE_DESCRIPTOR_MASK) {
         default: { // invalid/unused entry
+            // entry 还不是页表项
+            // 分配一页物理内存，返回地址
             paddr_t pa = alloc_func();
 
+            // 填充
             kernel_table0[index0] = (pa & MMU_PTE_OUTPUT_ADDR_MASK) |
                                     MMU_PTE_L012_DESCRIPTOR_TABLE;
             __FALLTHROUGH;
@@ -91,12 +98,14 @@ static inline zx_status_t _arm64_boot_map(pte_t* kernel_table0,
             return ZX_ERR_BAD_STATE;
         }
 
+        //2. 填充该页虚拟内存所对应的 L1 页表
         // make sure the level 2 pointer is valid
         size_t index1 = vaddr_to_l1_index(vaddr + off);
         pte_t* kernel_table2 = nullptr;
         switch (kernel_table1[index1] & MMU_PTE_DESCRIPTOR_MASK) {
         default: { // invalid/unused entry
             // a large page at this level is 1GB long, see if we can make one here
+            // 大页使用 block 而不是 page
             if ((((vaddr + off) & l1_large_page_size_mask) == 0) &&
                 (((paddr + off) & l1_large_page_size_mask) == 0) &&
                 (len - off) >= l1_large_page_size) {
@@ -123,6 +132,7 @@ static inline zx_status_t _arm64_boot_map(pte_t* kernel_table0,
             return ZX_ERR_BAD_STATE;
         }
 
+        //3. 填充该页虚拟内存所对应的 L2 页表
         // make sure the level 3 pointer is valid
         size_t index2 = vaddr_to_l2_index(vaddr + off);
         pte_t* kernel_table3 = nullptr;
@@ -154,7 +164,8 @@ static inline zx_status_t _arm64_boot_map(pte_t* kernel_table0,
             // not legal to have a block pointer at this level
             return ZX_ERR_BAD_STATE;
         }
-
+        
+        //3. 填充该页虚拟内存所对应的 L3 页表
         // generate a standard page mapping
         size_t index3 = vaddr_to_l3_index(vaddr + off);
         kernel_table3[index3] = ((paddr + off) & MMU_PTE_OUTPUT_ADDR_MASK) | flags | MMU_PTE_L3_DESCRIPTOR_PAGE;
@@ -185,6 +196,9 @@ extern "C" zx_status_t arm64_boot_map(pte_t* kernel_table0,
         // this point in the boot process
         // use a volatile pointer to make sure the compiler doesn't emit a memset call
         volatile pte_t* vptr = reinterpret_cast<volatile pte_t*>(pa);
+
+        
+        // 4k(页大小) / 8(地址描述符大小(实际只取其中 48 bit)) = 2 ^(12 - 3)
         for (auto i = 0; i < MMU_KERNEL_PAGE_TABLE_ENTRIES; i++)
             vptr[i] = 0;
 

@@ -78,6 +78,7 @@ namespace {
 
 class AsidAllocator {
 public:
+    // set bitmap 的大小
     AsidAllocator() { bitmap_.Reset(MMU_ARM64_MAX_USER_ASID + 1); }
     ~AsidAllocator() = default;
 
@@ -89,7 +90,7 @@ private:
 
     fbl::Mutex lock_;
     uint16_t last_ TA_GUARDED(lock_) = MMU_ARM64_FIRST_USER_ASID - 1;
-
+    
     bitmap::RawBitmapGeneric<bitmap::FixedStorage<MMU_ARM64_MAX_USER_ASID + 1>> bitmap_ TA_GUARDED(lock_);
 
     static_assert(MMU_ARM64_ASID_BITS <= 16, "");
@@ -110,6 +111,7 @@ zx_status_t AsidAllocator::Alloc(uint16_t* asid) {
             // search again from the start
             notfound = bitmap_.Get(MMU_ARM64_FIRST_USER_ASID, MMU_ARM64_MAX_USER_ASID + 1, &val);
             if (unlikely(notfound)) {
+                // ASID 溢出未做处理？
                 TRACEF("ARM64: out of ASIDs\n");
                 return ZX_ERR_NO_MEMORY;
             }
@@ -296,11 +298,13 @@ static void s2_pte_attr_to_mmu_flags(pte_t pte, uint* mmu_flags) {
     }
 }
 
+// 由虚拟地址查询物理地址
 zx_status_t ArmArchVmAspace::Query(vaddr_t vaddr, paddr_t* paddr, uint* mmu_flags) {
     fbl::AutoLock a(&lock_);
     return QueryLocked(vaddr, paddr, mmu_flags);
 }
 
+// 模拟 MMU 工作
 zx_status_t ArmArchVmAspace::QueryLocked(vaddr_t vaddr, paddr_t* paddr, uint* mmu_flags) {
     ulong index;
     uint index_shift;
@@ -1048,6 +1052,7 @@ zx_status_t ArmArchVmAspace::Init(vaddr_t base, size_t size, uint flags) {
     DEBUG_ASSERT(base + size - 1 > base);
 
     flags_ = flags;
+    // 内核空间
     if (flags & ARCH_ASPACE_FLAG_KERNEL) {
         // At the moment we can only deal with address spaces as globally defined.
         DEBUG_ASSERT(base == ~0UL << MMU_KERNEL_SIZE_SHIFT);
@@ -1059,10 +1064,16 @@ zx_status_t ArmArchVmAspace::Init(vaddr_t base, size_t size, uint flags) {
         tt_phys_ = vaddr_to_paddr(const_cast<pte_t*>(tt_virt_));
         asid_ = (uint16_t)MMU_ARM64_GLOBAL_ASID;
     } else {
+        
         if (flags & ARCH_ASPACE_FLAG_GUEST) {
+            // Guest 内核空间
+            // 无需 asid
             DEBUG_ASSERT(base + size <= 1UL << MMU_GUEST_SIZE_SHIFT);
         } else {
+            // 用户空间
             DEBUG_ASSERT(base + size <= 1UL << MMU_USER_SIZE_SHIFT);
+            // 分配该进程的 ASID
+            // 分配失败则返回
             if (asid.Alloc(&asid_) != ZX_OK)
                 return ZX_ERR_NO_MEMORY;
         }
@@ -1108,6 +1119,9 @@ zx_status_t ArmArchVmAspace::Destroy() {
     DEBUG_ASSERT(page);
     pmm_free_page(page);
 
+    // 需要 flush 所有 CPU 的缓存中该 ASID 空间残余的 TBL
+    // ARM64 可以使用 tlbi 指令实现这一操作
+    // X86 是不支持的，需要使用核间中断通知每个 CPU 自行操作
     if (flags_ & ARCH_ASPACE_FLAG_GUEST) {
         paddr_t vttbr = arm64_vttbr(asid_, tt_phys_);
         __UNUSED zx_status_t status = arm64_el2_tlbi_vmid(vttbr);
@@ -1121,6 +1135,7 @@ zx_status_t ArmArchVmAspace::Destroy() {
     return ZX_OK;
 }
 
+// 切换内存地址空间，即切换页表
 void ArmArchVmAspace::ContextSwitch(ArmArchVmAspace* old_aspace, ArmArchVmAspace* aspace) {
     if (TRACE_CONTEXT_SWITCH)
         TRACEF("aspace %p\n", aspace);
