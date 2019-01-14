@@ -82,6 +82,7 @@ static void init_thread_lock_state(thread_t* t) {
 #endif
 }
 
+//初始化结构体
 static void init_thread_struct(thread_t* t, const char* name) {
     memset(t, 0, sizeof(thread_t));
     t->magic = THREAD_MAGIC;
@@ -969,9 +970,11 @@ void thread_construct_first(thread_t* t, const char* name) {
  * This function is called once, from kmain()
  */
 void thread_init_early(void) {
+    //保证是 prime cpu 调用
     DEBUG_ASSERT(arch_curr_cpu_num() == 0);
 
     // create a thread to cover the current running state
+    //创建 idle 线程的数据结构
     thread_t* t = &percpu[0].idle_thread;
     thread_construct_first(t, "bootstrap");
 
