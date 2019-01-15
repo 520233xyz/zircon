@@ -78,6 +78,16 @@
                                   ((page_size_shift == 16) & 1) | \
                                   (((page_size_shift == 16) & 1) << 1))
 
+// 定义各个level的地址bit偏移
+// 2^page_shift = 单页大小, page_shift 也代表着虚拟地址中页内偏移所占 bit 数
+// level 则是页表的等级
+// 那么这段宏的含义就是，对应等级的页表在虚拟地址中的偏移
+// 比如当页大小等于 4K，顶级页表 L0
+// page_shift = 12 level = 0
+// 虚拟地址 bit 分布如下
+// 页表基地址	 L0	         L1	         L2	         L3       页内Offset
+//  16          9	        9	        9	        9	        12
+// L0 偏移则是 39, 30 - 39 bit
 #define MMU_LX_X(page_shift, level) ((4 - (level)) * ((page_shift) - 3) + 3)
 
 #if MMU_USER_SIZE_SHIFT > MMU_LX_X(MMU_USER_PAGE_SIZE_SHIFT, 0)
@@ -95,6 +105,7 @@
 #define MMU_USER_PAGE_TABLE_ENTRIES (0x1 << (MMU_USER_PAGE_SIZE_SHIFT - 3))
 
 #if MMU_KERNEL_SIZE_SHIFT > MMU_LX_X(MMU_KERNEL_PAGE_SIZE_SHIFT, 0)
+//L0 index 在虚拟地址中的 bit 偏移 *
 #define MMU_KERNEL_TOP_SHIFT MMU_LX_X(MMU_KERNEL_PAGE_SIZE_SHIFT, 0)
 #elif MMU_KERNEL_SIZE_SHIFT > MMU_LX_X(MMU_KERNEL_PAGE_SIZE_SHIFT, 1)
 #define MMU_KERNEL_TOP_SHIFT MMU_LX_X(MMU_KERNEL_PAGE_SIZE_SHIFT, 1)

@@ -325,13 +325,21 @@ zx_status_t ArmArchVmAspace::QueryLocked(vaddr_t vaddr, paddr_t* paddr, uint* mm
         return ZX_ERR_OUT_OF_RANGE;
 
     // Compute shift values based on if this address space is for kernel or user space.
+    // 从 vaddr 中截取 L0 页表的 index
     if (flags_ & ARCH_ASPACE_FLAG_KERNEL) {
+        // 如果是虚拟地址是内核页
+        // L0 index 在虚拟地址中的 bit 偏移*
+        // 等于 39
         index_shift = MMU_KERNEL_TOP_SHIFT;
+        // 页内偏移 在虚拟地址中的位置
+        // 等于 12
         page_size_shift = MMU_KERNEL_PAGE_SIZE_SHIFT;
 
+        // kernel base 虚拟地址
         vaddr_t kernel_base = ~0UL << MMU_KERNEL_SIZE_SHIFT;
+        // 消去虚拟地址高 16bit
         vaddr_rem = vaddr - kernel_base;
-
+        // 获得 L0 的 index(9bit)
         index = vaddr_rem >> index_shift;
         ASSERT(index < MMU_KERNEL_PAGE_TABLE_ENTRIES_TOP);
     } else if (flags_ & ARCH_ASPACE_FLAG_GUEST) {
@@ -353,8 +361,12 @@ zx_status_t ArmArchVmAspace::QueryLocked(vaddr_t vaddr, paddr_t* paddr, uint* mm
     page_table = tt_virt_;
 
     while (true) {
+        // L0 的 index(9bit)
         index = vaddr_rem >> index_shift;
+        // 消去 L0 的那 9bit
+        // 到现在整个 vaddr 64bit 只剩下 L1-L2-L3-页内偏移
         vaddr_rem -= (vaddr_t)index << index_shift;
+        // 从 L0 页表中查询 L1 的地址
         pte = page_table[index];
         descriptor_type = pte & MMU_PTE_DESCRIPTOR_MASK;
         pte_addr = pte & MMU_PTE_OUTPUT_ADDR_MASK;
@@ -366,6 +378,7 @@ zx_status_t ArmArchVmAspace::QueryLocked(vaddr_t vaddr, paddr_t* paddr, uint* mm
         if (descriptor_type == MMU_PTE_DESCRIPTOR_INVALID)
             return ZX_ERR_NOT_FOUND;
 
+        //已经循环到业内偏移的低 12 bit，则可以退出循环了，paddr 已经组装完毕！
         if (descriptor_type == ((index_shift > page_size_shift) ? MMU_PTE_L012_DESCRIPTOR_BLOCK : MMU_PTE_L3_DESCRIPTOR_PAGE)) {
             break;
         }
@@ -374,7 +387,7 @@ zx_status_t ArmArchVmAspace::QueryLocked(vaddr_t vaddr, paddr_t* paddr, uint* mm
             descriptor_type != MMU_PTE_L012_DESCRIPTOR_TABLE) {
             PANIC_UNIMPLEMENTED;
         }
-
+        // 取下一个等级的页表
         page_table = static_cast<volatile pte_t*>(paddr_to_physmap(pte_addr));
         index_shift -= page_size_shift - 3;
     }
