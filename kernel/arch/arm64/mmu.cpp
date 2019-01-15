@@ -392,8 +392,13 @@ zx_status_t ArmArchVmAspace::QueryLocked(vaddr_t vaddr, paddr_t* paddr, uint* mm
         index_shift -= page_size_shift - 3;
     }
 
+    //最后出来 vaddr_rem 仅有 vaddr 的低 12 bit 的页内偏移
+    //还有对应的最后一级 L3 页表的 pte
     if (paddr)
+        //则物理地址 = pte 内容(目标页基地址) + 页内偏移
         *paddr = pte_addr + vaddr_rem;
+
+    //如果需要查 mmu flag 的话，填充 flag 返回    
     if (mmu_flags) {
         *mmu_flags = 0;
         if (flags_ & ARCH_ASPACE_FLAG_GUEST) {
@@ -407,6 +412,7 @@ zx_status_t ArmArchVmAspace::QueryLocked(vaddr_t vaddr, paddr_t* paddr, uint* mm
     return 0;
 }
 
+// 分配页表
 zx_status_t ArmArchVmAspace::AllocPageTable(paddr_t* paddrp, uint page_size_shift) {
     LTRACEF("page_size_shift %u\n", page_size_shift);
 
@@ -508,6 +514,7 @@ static bool page_table_is_clear(volatile pte_t* page_table, uint page_size_shift
     return true;
 }
 
+// 从缓存中 FLush TBL
 // use the appropriate TLB flush instruction to globally flush the modified entry
 // terminal is set when flushing at the final level of the page table.
 void ArmArchVmAspace::FlushTLBEntry(vaddr_t vaddr, bool terminal) {
@@ -516,6 +523,7 @@ void ArmArchVmAspace::FlushTLBEntry(vaddr_t vaddr, bool terminal) {
         __UNUSED zx_status_t status = arm64_el2_tlbi_ipa(vttbr, vaddr, terminal);
         DEBUG_ASSERT(status == ZX_OK);
     } else if (asid_ == MMU_ARM64_GLOBAL_ASID) {
+        // 内核 ASID
         // flush this address on all ASIDs
         if (terminal) {
             ARM64_TLBI(vaale1is, vaddr >> 12);
@@ -524,6 +532,7 @@ void ArmArchVmAspace::FlushTLBEntry(vaddr_t vaddr, bool terminal) {
         }
     } else {
         // flush this address for the specific asid
+        // 某个用户进程
         if (terminal) {
             ARM64_TLBI(vale1is, vaddr >> 12 | (vaddr_t)asid_ << 48);
         } else {
@@ -532,6 +541,7 @@ void ArmArchVmAspace::FlushTLBEntry(vaddr_t vaddr, bool terminal) {
     }
 }
 
+// 取消映射某段地址
 // NOTE: caller must DSB afterwards to ensure TLB entries are flushed
 ssize_t ArmArchVmAspace::UnmapPageTable(vaddr_t vaddr, vaddr_t vaddr_rel,
                                         size_t size, uint index_shift,
@@ -602,6 +612,7 @@ ssize_t ArmArchVmAspace::UnmapPageTable(vaddr_t vaddr, vaddr_t vaddr_rel,
     return unmap_size;
 }
 
+// map 一页
 // NOTE: caller must DSB afterwards to ensure TLB entries are flushed
 ssize_t ArmArchVmAspace::MapPageTable(vaddr_t vaddr_in, vaddr_t vaddr_rel_in,
                                       paddr_t paddr_in, size_t size_in,
@@ -633,27 +644,45 @@ ssize_t ArmArchVmAspace::MapPageTable(vaddr_t vaddr_in, vaddr_t vaddr_rel_in,
         return ZX_ERR_INVALID_ARGS;
     }
 
+    // 初始 index_shift = L0 的 shift = 39
+    // vaddr_rel = vaddr 消去高 16 bit
+    // size = 页大小
+
     mapped_size = 0;
     while (size) {
+        //以第一次循环为例，下次循环以此类推
+        //所能管理的内存块大小
+        //初始值 2^39
         block_size = 1UL << index_shift;
+        //2^39 - 1 = 000000000000111111111111111
         block_mask = block_size - 1;
+        //消去 39 - 47 bit，现在 vaddr_rem 只有 0 - 38 bit的值了
         vaddr_rem = vaddr_rel & block_mask;
+        //block_size - vaddr_rem = 对于 size 大小的内偏移 = 页内偏移
         chunk_size = MIN(size, block_size - vaddr_rem);
+
+        //现在循环的等级页表的 index(9 bit)，现在是 L0,即 39 - 47 bit 的值
         index = vaddr_rel >> index_shift;
 
+        //发现这个不是最后一级页表
         if (((vaddr_rel | paddr) & block_mask) ||
             (chunk_size != block_size) ||
             (index_shift > MMU_PTE_DESCRIPTOR_BLOCK_MAX_SHIFT)) {
+
+            //从这一级页表中查询 index，得到下一级页表    
             next_page_table = GetPageTable(index, page_size_shift, page_table);
             if (!next_page_table)
                 goto err;
 
+            //如果还有下一级页面表，则递归 Map
             ret = MapPageTable(vaddr, vaddr_rem, paddr, chunk_size, attrs,
                                index_shift - (page_size_shift - 3),
                                page_size_shift, next_page_table);
             if (ret < 0)
                 goto err;
         } else {
+
+            // 最后一级页表对应的页表项
             pte = page_table[index];
             if (pte) {
                 TRACEF("page table entry already in use, index %#" PRIxPTR ", %#" PRIx64 "\n",
@@ -661,6 +690,7 @@ ssize_t ArmArchVmAspace::MapPageTable(vaddr_t vaddr_in, vaddr_t vaddr_rel_in,
                 goto err;
             }
 
+            //设置页表项为要 map 的物理地址
             pte = paddr | attrs;
             if (index_shift > page_size_shift)
                 pte |= MMU_PTE_L012_DESCRIPTOR_BLOCK;
@@ -670,6 +700,7 @@ ssize_t ArmArchVmAspace::MapPageTable(vaddr_t vaddr_in, vaddr_t vaddr_rel_in,
                 pte |= MMU_PTE_ATTR_NON_GLOBAL;
             LTRACEF("pte %p[%#" PRIxPTR "] = %#" PRIx64 "\n",
                     page_table, index, pte);
+            //再次填充到页表        
             page_table[index] = pte;
         }
         vaddr += chunk_size;
@@ -765,6 +796,8 @@ err:
 }
 
 // internal routine to map a run of pages
+
+// map 一页
 ssize_t ArmArchVmAspace::MapPages(vaddr_t vaddr, paddr_t paddr, size_t size,
                                   pte_t attrs, vaddr_t vaddr_base, uint top_size_shift,
                                   uint top_index_shift, uint page_size_shift) {
@@ -914,6 +947,7 @@ zx_status_t ArmArchVmAspace::MapContiguous(vaddr_t vaddr, paddr_t paddr, size_t 
     return (ret < 0) ? (zx_status_t)ret : ZX_OK;
 }
 
+//Map 一段地址 paddr -> vaddr
 zx_status_t ArmArchVmAspace::Map(vaddr_t vaddr, paddr_t* phys, size_t count, uint mmu_flags,
                                  size_t* mapped) {
     canary_.Assert();
@@ -925,16 +959,20 @@ zx_status_t ArmArchVmAspace::Map(vaddr_t vaddr, paddr_t* phys, size_t count, uin
     DEBUG_ASSERT(IsValidVaddr(vaddr));
     if (!IsValidVaddr(vaddr))
         return ZX_ERR_OUT_OF_RANGE;
+
+    // 检查 phys[] 是不是为页大小的数组即页大小的 count 倍    
     for (size_t i = 0; i < count; ++i) {
         DEBUG_ASSERT(IS_PAGE_ALIGNED(phys[i]));
         if (!IS_PAGE_ALIGNED(phys[i]))
             return ZX_ERR_INVALID_ARGS;
     }
 
+    //如果这段内存被设置为不可读，那么 map 将无意义，直接返回报错
     if (!(mmu_flags & ARCH_MMU_FLAG_PERM_READ))
         return ZX_ERR_INVALID_ARGS;
 
     // vaddr must be aligned.
+    // 虚拟地址也必须与页大小对齐
     DEBUG_ASSERT(IS_PAGE_ALIGNED(vaddr));
     if (!IS_PAGE_ALIGNED(vaddr))
         return ZX_ERR_INVALID_ARGS;
@@ -943,16 +981,29 @@ zx_status_t ArmArchVmAspace::Map(vaddr_t vaddr, paddr_t* phys, size_t count, uin
         return ZX_OK;
 
     size_t total_mapped = 0;
-    {
+    //同步块
+    {   
         fbl::AutoLock a(&lock_);
         pte_t attrs;
         vaddr_t vaddr_base;
+        // 初始化虚拟地址各个段偏移
+        // 以内核空间为例
+        // 页大小为 4k，所以页面偏移占用 12 bit
+        // 有4级页表，每级页表占用 9 bit
+        // 页表基地址 占用 16 bit
+        // 16 + 4 * 9 + 12 = 64
+        // top_size_shift 虚拟地址高 16 位，页表基地址
+        // top_index_shift L0 页表偏移 64 - （top_size_shift + 9） = 39
+        // page_size_shift = 12
+        // vaddr_base = kernel base
         uint top_size_shift, top_index_shift, page_size_shift;
         MmuParamsFromFlags(mmu_flags, &attrs, &vaddr_base, &top_size_shift, &top_index_shift,
                            &page_size_shift);
 
         ssize_t ret;
         size_t idx = 0;
+
+        // 代码块结束的时候自动调用
         auto undo = fbl::MakeAutoCall([&]() TA_NO_THREAD_SAFETY_ANALYSIS {
             if (idx > 0) {
                 UnmapPages(vaddr, idx * PAGE_SIZE, vaddr_base, top_size_shift,
@@ -965,6 +1016,7 @@ zx_status_t ArmArchVmAspace::Map(vaddr_t vaddr, paddr_t* phys, size_t count, uin
             paddr_t paddr = phys[idx];
             DEBUG_ASSERT(IS_PAGE_ALIGNED(paddr));
             // TODO: optimize by not DSBing inside each of these calls
+            // 一页一页的 map
             ret = MapPages(v, paddr, PAGE_SIZE,
                            attrs, vaddr_base, top_size_shift,
                            top_index_shift, page_size_shift);

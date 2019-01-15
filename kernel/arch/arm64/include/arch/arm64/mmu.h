@@ -87,7 +87,7 @@
 // 虚拟地址 bit 分布如下
 // 页表基地址	 L0	         L1	         L2	         L3       页内Offset
 //  16          9	        9	        9	        9	        12
-// L0 偏移则是 39, 30 - 39 bit
+// L0 偏移则是 39, 39 - 48 bit
 #define MMU_LX_X(page_shift, level) ((4 - (level)) * ((page_shift) - 3) + 3)
 
 #if MMU_USER_SIZE_SHIFT > MMU_LX_X(MMU_USER_PAGE_SIZE_SHIFT, 0)
